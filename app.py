@@ -7,7 +7,6 @@ import plotly.express as px
 
 st.set_page_config(page_title="Events Dashboard", layout="wide")
 
-
 # ------------------------------
 # Utility Functions
 # ------------------------------
@@ -55,36 +54,67 @@ def main():
     # 1️⃣ OVERVIEW
     # =====================================================
     if selection == "Overview":
-        st.subheader("📂 Tables in Database")
 
-        for t in table_names:
-            st.write(f"- **{t}**")
-
-        st.markdown("---")
         st.subheader("📊 Event Registrations Summary")
 
         if "events" in table_names and "registrations" in table_names:
+
             regs = read_table_sample("registrations", limit=20000)
             events = read_table_sample("events", limit=20000)
 
             if not regs.empty and not events.empty:
-                merged = regs.merge(events, left_on="event_id", right_on="id", how="left")
-                counts = merged.groupby("name")["no"].count().reset_index()
-                counts = counts.sort_values("no", ascending=False)
-                counts.columns = ["Event Name", "Total Registrations"]
 
-                st.dataframe(counts)
+                # Merge registrations + events to get names + categories
+                merged = regs.merge(
+                    events,
+                    left_on="event_id",
+                    right_on="id",
+                    how="left"
+                )
 
-                fig = px.bar(counts, x="Event Name", y="Total Registrations",
-                             title="Event-wise Registrations")
-                st.plotly_chart(fig, use_container_width=True)
+                # Build summary table
+                summary = merged.groupby(["name", "category"]).agg(
+                    Total_Registrations=("no", "count"),
+                    Total_Paid=("is_paid", "sum"),
+                ).reset_index()
+
+                # Calculate unpaid
+                summary["Total_Unpaid"] = summary["Total_Registrations"] - summary["Total_Paid"]
+
+                # Sort
+                summary = summary.sort_values("Total_Registrations", ascending=False)
+
+                # Show table
+                st.dataframe(summary)
+
+                # Chart 1
+                fig1 = px.bar(
+                    summary,
+                    x="name",
+                    y="Total_Registrations",
+                    color="category",
+                    title="Event-wise Total Registrations",
+                )
+                st.plotly_chart(fig1, use_container_width=True)
+
+                # Chart 2
+                fig2 = px.bar(
+                    summary,
+                    x="name",
+                    y=["Total_Paid", "Total_Unpaid"],
+                    title="Paid vs Unpaid Per Event",
+                    barmode="group",
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+
             else:
-                st.info("No data in registrations or events table.")
+                st.info("Need data in both events and registrations tables.")
 
     # =====================================================
     # 2️⃣ TABLE BROWSER
     # =====================================================
     elif selection == "Table Browser":
+
         st.subheader("🔎 Table Browser")
 
         selected_table = st.selectbox("Choose a table", table_names)
@@ -101,12 +131,18 @@ def main():
         st.dataframe(df)
 
         csv = df.to_csv(index=False)
-        st.download_button("Download CSV", csv, file_name=f"{selected_table}.csv", mime="text/csv")
+        st.download_button(
+            "Download CSV",
+            csv,
+            file_name=f"{selected_table}.csv",
+            mime="text/csv"
+        )
 
     # =====================================================
     # 3️⃣ EVENT-WISE STUDENT LIST
     # =====================================================
     elif selection == "Event-wise Student List":
+
         st.header("📋 Event-wise Student List")
 
         events = read_table_sample("events", limit=20000)
@@ -183,6 +219,7 @@ def main():
     # 4️⃣ PAYMENTS DASHBOARD
     # =====================================================
     elif selection == "Payments Dashboard":
+
         st.header("💰 Payments Dashboard")
 
         regs = read_table_sample("registrations", limit=20000)
@@ -201,26 +238,23 @@ def main():
 
         # Payment Status
         st.subheader("Payment Status Breakdown")
-        status_counts = regs["payment_status"].value_counts().reset_index()
+        status_counts = regs["payment_status"].value.value_counts().reset_index()
         status_counts.columns = ["Status", "Count"]
         st.dataframe(status_counts)
         st.plotly_chart(px.bar(status_counts, x="Status", y="Count"), use_container_width=True)
 
-        # Event-wise paid registrations
-        # 3️⃣ Event-wise Paid Registrations + Revenue
+        # Event-wise Paid Registrations + Revenue
         st.subheader("Event-wise Paid Registrations & Revenue")
 
         merged = regs.merge(events, left_on="event_id", right_on="id", how="left")
         paid_only = merged[merged["is_paid"] == True]
 
-        # Count paid registrations per event
         event_paid = paid_only.groupby(["name", "registration_fee"])["no"].count().reset_index()
         event_paid.columns = ["Event Name", "Registration Fee", "Paid Registrations"]
 
-# Calculate revenue
+        # Calculate revenue
         event_paid["Total Revenue"] = event_paid["Registration Fee"] * event_paid["Paid Registrations"]
 
-# Sort by revenue
         event_paid = event_paid.sort_values("Total Revenue", ascending=False)
 
         st.dataframe(event_paid)
@@ -236,18 +270,6 @@ def main():
 
         grand_total = event_paid["Total Revenue"].sum()
         st.metric("💰 Grand Total Revenue", f"₹ {grand_total}")
-
-        # Revenue
-        st.subheader("Estimated Revenue")
-        if "registration_fee" in events.columns:
-            merged["fee"] = merged.apply(
-                lambda r: r["registration_fee"] if r["is_paid"] else 0, axis=1
-            )
-            total_rev = merged["fee"].sum()
-            st.metric("Total Revenue (₹)", total_rev)
-        else:
-            st.info("registration_fee column not found in events table.")
-
 
 # ------------------------------
 # Run App
