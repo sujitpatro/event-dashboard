@@ -30,12 +30,34 @@ def read_table_sample(table, limit=20000):
     return df
 
 
+
 # ------------------------------
 # MAIN APP
 # ------------------------------
 def main():
 
     st.title("🎉 Events / Registrations Dashboard")
+
+    # --- Center alignment fix ---
+    st.markdown("""
+<style>
+
+/* Center align column headers */
+[data-testid="stDataFrame"] div[role="columnheader"] > div {
+    justify-content: center !important;
+    text-align: center !important;
+}
+
+/* Center align all table cells */
+[data-testid="stDataFrame"] div[role="cell"] {
+    justify-content: center !important;
+    text-align: center !important;
+}
+
+</style>
+    """, unsafe_allow_html=True)
+
+
 
     st.sidebar.header("📌 Navigation")
     selection = st.sidebar.radio(
@@ -237,11 +259,13 @@ def main():
         st.plotly_chart(px.pie(paid_counts, names="Paid?", values="Count"), use_container_width=True)
 
         # Payment Status
+        # Payment Status
         st.subheader("Payment Status Breakdown")
-        status_counts = regs["payment_status"].value.value_counts().reset_index()
+        status_counts = regs["payment_status"].value_counts().reset_index()
         status_counts.columns = ["Status", "Count"]
         st.dataframe(status_counts)
         st.plotly_chart(px.bar(status_counts, x="Status", y="Count"), use_container_width=True)
+
 
         # Event-wise Paid Registrations + Revenue
         st.subheader("Event-wise Paid Registrations & Revenue")
